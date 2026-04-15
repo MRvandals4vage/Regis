@@ -5,3 +5,5 @@ opencv-python
 sounddevice
 numpy
 Pillow
+PyQt6
+pyinstaller
