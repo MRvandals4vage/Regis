@@ -1,0 +1,97 @@
+# ========================
+# Python
+# ========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.env/
+.venv/
+env/
+ENV/
+
+# Python packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs
+*.log
+
+# ========================
+# macOS
+# ========================
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ========================
+# IDE / Editors
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ========================
+# Jupyter
+# ========================
+.ipynb_checkpoints/
+
+# ========================
+# Environment Variables
+# ========================
+.env
+.env.local
+.env.*.local
+
+# ========================
+# AI / Model Files
+# ========================
+models/
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# Whisper / audio cache
+*.wav
+*.mp3
+*.flac
+
+# ========================
+# Vision / Screenshots
+# ========================
+screenshots/
+*.png
+*.jpg
+*.jpeg
+
+# ========================
+# Temporary Files
+# ========================
+tmp/
+temp/
+*.tmp
+
+# ========================
+# OS / Misc
+# ========================
+Thumbs.db
+
+# ========================
+# Secrets (IMPORTANT)
+# ========================
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+
+# API keys / configs
+config.local.py
+secrets.json
