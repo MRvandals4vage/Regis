@@ -33,6 +33,7 @@ Available actions and their required params:
 Rules:
 - Use open_url for web tasks, open_app for native apps.
 - Chain steps logically.
+- If opening an app and then typing text, ALWAYS add a `wait` step (2-3 seconds) between `open_app` and `type_text` so the app has time to load.
 - Never include explanations outside the JSON.
 """
 
@@ -81,23 +82,30 @@ def _stub_plan(text: str) -> dict:
     even without a running model.
     """
     t = text.lower()
+    steps = []
 
-    if "open" in t:
-        match = re.search(r'open\s+([a-zA-Z0-9\-\s]+)', text, re.IGNORECASE)
-        if match:
-            app_name = match.group(1).strip()
-            # Map some common aliases
-            if app_name.lower() in ("browser", "safari"):
-                app_name = "Safari"
-            elif app_name.lower() in ("chrome", "google chrome"):
-                app_name = "Google Chrome"
-            return {"steps": [{"action": "open_app", "params": {"app_name": app_name}}]}
+    # 1. Open app
+    app_match = re.search(r'open\s+([a-zA-Z0-9\-\s]+?)(?:\s+and\s+|$)', text, re.IGNORECASE)
+    if app_match:
+        app_name = app_match.group(1).strip()
+        if app_name.lower() in ("browser", "safari"):
+            app_name = "Safari"
+        elif app_name.lower() in ("chrome", "google chrome"):
+            app_name = "Google Chrome"
+        steps.append({"action": "open_app", "params": {"app_name": app_name}})
 
-    if "type" in t or "write" in t:
-        # Extract quoted text if present
-        match = re.search(r'["\'](.+?)["\']', text)
-        content = match.group(1) if match else text
-        return {"steps": [{"action": "type_text", "params": {"text": content}}]}
+    # 2. Type text
+    type_match = re.search(r'(?:type|write)\s+(?:["\']([^"\']+)["\']|(.*))', text, re.IGNORECASE)
+    if type_match:
+        content = type_match.group(1) or type_match.group(2)
+        if content:
+            # If we just launched an app, wait briefly
+            if steps and steps[-1]["action"] == "open_app":
+                steps.append({"action": "wait", "params": {"seconds": 2}})
+            steps.append({"action": "type_text", "params": {"text": content.strip()}})
+
+    if steps:
+        return {"steps": steps}
 
     if "screenshot" in t or "screen" in t:
         return {"steps": [{"action": "get_screen_text", "params": {}}]}
