@@ -60,7 +60,7 @@ app.whenReady().then(() => {
   })
 
   // Hide dock icon correctly on macOS to make it a pure Menu Bar app
-  if (process.platform === 'darwin') {
+  if (process.platform === 'darwin' && app.dock) {
     app.dock.hide()
   }
 

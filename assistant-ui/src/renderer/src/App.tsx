@@ -52,9 +52,9 @@ export default function App() {
     }}>
       {/* Draggable Title Bar */}
       <div style={{
-        height: '30px', WebkitAppRegion: 'drag' as any, backgroundColor: '#252526', 
+        height: '30px', WebkitAppRegion: 'drag', backgroundColor: '#252526', 
         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold'
-      }}>
+      } as any}>
         Regis Assistant
       </div>
 
