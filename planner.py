@@ -82,14 +82,16 @@ def _stub_plan(text: str) -> dict:
     """
     t = text.lower()
 
-    if "open" in t and ("safari" in t or "browser" in t):
-        return {"steps": [{"action": "open_app", "params": {"app_name": "Safari"}}]}
-
-    if "open" in t and "chrome" in t:
-        return {"steps": [{"action": "open_app", "params": {"app_name": "Google Chrome"}}]}
-
-    if "open" in t and "terminal" in t:
-        return {"steps": [{"action": "open_app", "params": {"app_name": "Terminal"}}]}
+    if "open" in t:
+        match = re.search(r'open\s+([a-zA-Z0-9\-\s]+)', text, re.IGNORECASE)
+        if match:
+            app_name = match.group(1).strip()
+            # Map some common aliases
+            if app_name.lower() in ("browser", "safari"):
+                app_name = "Safari"
+            elif app_name.lower() in ("chrome", "google chrome"):
+                app_name = "Google Chrome"
+            return {"steps": [{"action": "open_app", "params": {"app_name": app_name}}]}
 
     if "type" in t or "write" in t:
         # Extract quoted text if present
