@@ -94,15 +94,24 @@ def _stub_plan(text: str) -> dict:
             app_name = "Google Chrome"
         steps.append({"action": "open_app", "params": {"app_name": app_name}})
 
-    # 2. Type text
+    # 2. Search
+    search_match = re.search(r'search(?:\s+for)?\s+(?:["\']([^"\']+)["\']|(.*))', text, re.IGNORECASE)
+    if search_match:
+        query = search_match.group(1) or search_match.group(2)
+        if query:
+            import urllib.parse
+            url = "https://www.google.com/search?q=" + urllib.parse.quote(query.strip())
+            return {"steps": [{"action": "open_url", "params": {"url": url}}]}
+
+    # 3. Type text
     type_match = re.search(r'(?:type|write)\s+(?:["\']([^"\']+)["\']|(.*))', text, re.IGNORECASE)
     if type_match:
         content = type_match.group(1) or type_match.group(2)
         if content:
-            # If we just launched an app, wait briefly
             if steps and steps[-1]["action"] == "open_app":
                 steps.append({"action": "wait", "params": {"seconds": 2}})
             steps.append({"action": "type_text", "params": {"text": content.strip()}})
+            steps.append({"action": "press_key", "params": {"key": "enter"}})
 
     if steps:
         return {"steps": steps}

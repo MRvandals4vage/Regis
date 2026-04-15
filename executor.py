@@ -40,13 +40,21 @@ def _type_text(params: dict):
     text = params["text"]
     print(f"[Exec] Typing: {text!r}")
     time.sleep(0.3)
-    pyautogui.write(text, interval=0.03)
+    # Use osascript natively for much higher reliability on macOS
+    safe_text = text.replace('\\', '\\\\').replace('"', '\\"')
+    script = f'tell application "System Events" to keystroke "{safe_text}"'
+    subprocess.run(["osascript", "-e", script])
 
 
 def _press_key(params: dict):
-    key = params["key"]
+    key = params["key"].lower()
     print(f"[Exec] Pressing key: {key}")
-    pyautogui.press(key)
+    if key == "enter" or key == "return":
+        script = 'tell application "System Events" to key code 36'
+        subprocess.run(["osascript", "-e", script])
+    else:
+        # Fallback to pyautogui for other special keys
+        pyautogui.press(key)
 
 
 def _hotkey(params: dict):
