@@ -3,8 +3,12 @@
 # Usage: bash start.sh
 
 set -e
+
+# ── Environment Setup ─────────────────────────────────────────────────────────
 # Ensure Homebrew's bin is on PATH (needed for npm/node on macOS)
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:$PATH"
+
+# Get absolute paths to handle spaces in directory names
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 BRAIN="$ROOT/ai_assistant"
 UI="$ROOT/assistant-ui"
@@ -13,13 +17,13 @@ UI="$ROOT/assistant-ui"
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
-echo -e "\n${BOLD}${CYAN}╔══════════════════════════════════════╗${NC}"
-echo -e "${BOLD}${CYAN}║        🧠  Regis Launcher             ║${NC}"
-echo -e "${BOLD}${CYAN}╚══════════════════════════════════════╝${NC}\n"
+printf "\n${BOLD}${CYAN}╔══════════════════════════════════════╗${NC}\n"
+printf "${BOLD}${CYAN}║        🧠  Regis Launcher             ║${NC}\n"
+printf "${BOLD}${CYAN}╚══════════════════════════════════════╝${NC}\n\n"
 
 # ── Check venv ────────────────────────────────────────────────────────────────
 if [ ! -d "$BRAIN/.venv" ]; then
-  echo -e "${YELLOW}⚙️  Creating Python virtual environment…${NC}"
+  printf "${YELLOW}⚙️  Creating Python virtual environment…${NC}\n"
   python3 -m venv "$BRAIN/.venv"
 fi
 
@@ -27,62 +31,62 @@ PYTHON="$BRAIN/.venv/bin/python"
 PIP="$BRAIN/.venv/bin/pip"
 
 # ── Install Python deps ───────────────────────────────────────────────────────
-echo -e "${YELLOW}📦 Checking Python dependencies…${NC}"
-$PIP install --quiet --upgrade pip
-$PIP install --quiet faster-whisper sounddevice numpy pyautogui Pillow requests
+printf "${YELLOW}📦 Checking Python dependencies…${NC}\n"
+"$PIP" install --quiet --upgrade pip
+"$PIP" install --quiet faster-whisper sounddevice numpy pyautogui Pillow requests
 
 # ── Install Node deps ─────────────────────────────────────────────────────────
 if [ ! -d "$UI/node_modules" ]; then
-  echo -e "${YELLOW}📦 Installing Node dependencies…${NC}"
+  printf "${YELLOW}📦 Installing Node dependencies…${NC}\n"
   cd "$UI" && npm install
 fi
 
 # ── Kill any stale server on port 8000 ───────────────────────────────────────
 OLD_PID=$(lsof -ti:8000 2>/dev/null || true)
 if [ -n "$OLD_PID" ]; then
-  echo -e "${YELLOW}🔪 Stopping old server (PID $OLD_PID)…${NC}"
-  kill -9 $OLD_PID 2>/dev/null || true
+  printf "${YELLOW}🔪 Stopping old server (PID $OLD_PID)…${NC}\n"
+  kill -9 "$OLD_PID" 2>/dev/null || true
   sleep 1
 fi
 
 # ── Start Python brain ────────────────────────────────────────────────────────
-echo -e "${GREEN}🧠 Starting Regis Brain (server.py)…${NC}"
+printf "${GREEN}🧠 Starting Regis Brain (server.py)…${NC}\n"
 cd "$BRAIN"
-$PYTHON server.py &
+"$PYTHON" server.py &
 BRAIN_PID=$!
-echo -e "   Brain PID: ${BOLD}$BRAIN_PID${NC}"
+printf "   Brain PID: ${BOLD}$BRAIN_PID${NC}\n"
 
 # Wait until /health responds
-echo -e "${YELLOW}⏳ Waiting for brain to come online…${NC}"
+printf "${YELLOW}⏳ Waiting for brain to come online…${NC}\n"
 MAX=20; COUNT=0
 until curl -sf http://127.0.0.1:8000/health > /dev/null 2>&1; do
   sleep 0.5; COUNT=$((COUNT+1))
   if [ $COUNT -ge $MAX ]; then
-    echo -e "${RED}❌ Brain did not start in time. Check ai_assistant/server.py.${NC}"
-    kill $BRAIN_PID 2>/dev/null || true
+    printf "${RED}❌ Brain did not start in time. Check ai_assistant/server.py.${NC}\n"
+    kill "$BRAIN_PID" 2>/dev/null || true
     exit 1
   fi
 done
-echo -e "${GREEN}✅ Brain is online at http://localhost:8000${NC}"
+printf "${GREEN}✅ Brain is online at http://localhost:8000${NC}\n"
 
 # ── Start Electron UI ─────────────────────────────────────────────────────────
-echo -e "${GREEN}🖥️  Starting Electron UI…${NC}"
+printf "${GREEN}🖥️  Starting Electron UI…${NC}\n"
 cd "$UI"
 npm run dev &
 UI_PID=$!
-echo -e "   UI PID: ${BOLD}$UI_PID${NC}\n"
+printf "   UI PID: ${BOLD}$UI_PID${NC}\n\n"
 
 # ── Trap Ctrl-C → clean shutdown ──────────────────────────────────────────────
 cleanup() {
-  echo -e "\n${YELLOW}👋 Shutting down Regis…${NC}"
-  kill $BRAIN_PID 2>/dev/null || true
-  kill $UI_PID    2>/dev/null || true
+  printf "\n${YELLOW}👋 Shutting down Regis…${NC}\n"
+  kill "$BRAIN_PID" 2>/dev/null || true
+  kill "$UI_PID"    2>/dev/null || true
   # Kill any child processes
-  pkill -P $UI_PID 2>/dev/null || true
-  echo -e "${GREEN}✅ Goodbye!${NC}"
+  pkill -P "$UI_PID" 2>/dev/null || true
+  printf "${GREEN}✅ Goodbye!${NC}\n"
   exit 0
 }
 trap cleanup INT TERM
 
-echo -e "${BOLD}${CYAN}Regis is running. Press Ctrl+C to quit.${NC}\n"
+printf "${BOLD}${CYAN}Regis is running. Press Ctrl+C to quit.${NC}\n\n"
 wait
