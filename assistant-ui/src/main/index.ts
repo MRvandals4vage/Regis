@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, Tray, Menu } from 'electron'
+import { app, shell, BrowserWindow, Tray, Menu, nativeImage } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -8,24 +8,31 @@ let mainWindow: BrowserWindow | null = null
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    width: 400,
-    height: 500,
-    show: false, // Don't show immediately, wait for tray
-    frame: false, // Frameless UI for floating look
+    width: 420,
+    height: 680,
+    show: false,
+    frame: false,
     transparent: true,
-    alwaysOnTop: true, // Float above other windows
+    alwaysOnTop: true,
     autoHideMenuBar: true,
+    resizable: false,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
-      contextIsolation: true
+      contextIsolation: true,
     }
   })
 
-  // Hide the window when user clicks somewhere else
+  // Show window when it's ready to prevent flash
+  win.once('ready-to-show', () => {
+    win.show()
+    win.focus()
+  })
+
+  // Hide when focus lost (menu-bar style)
   win.on('blur', () => {
-    win.hide()
+    if (!is.dev) win.hide()
   })
 
   win.webContents.setWindowOpenHandler((details) => {
@@ -38,7 +45,17 @@ function createWindow(): BrowserWindow {
   } else {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
   return win
+}
+
+const positionNearTray = () => {
+  if (!mainWindow || !tray) return
+  const trayBounds = tray.getBounds()
+  const winBounds = mainWindow.getBounds()
+  const x = Math.round(trayBounds.x + trayBounds.width / 2 - winBounds.width / 2)
+  const y = Math.round(trayBounds.y + trayBounds.height + 4)
+  mainWindow.setPosition(x, y)
 }
 
 const toggleWindow = () => {
@@ -46,42 +63,44 @@ const toggleWindow = () => {
   if (mainWindow.isVisible()) {
     mainWindow.hide()
   } else {
+    positionNearTray()
     mainWindow.show()
     mainWindow.focus()
   }
 }
 
 app.whenReady().then(() => {
-  // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('com.regis.assistant')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // Hide dock icon correctly on macOS to make it a pure Menu Bar app
+  // Hide dock icon on macOS — pure menu-bar app
   if (process.platform === 'darwin' && app.dock) {
     app.dock.hide()
   }
 
   mainWindow = createWindow()
 
-  // Setup System Tray
-  tray = new Tray(icon) // (Using default electron icon, natively you provide a 16x16 .png)
+  // Tray icon — use 16x16 template image on macOS for automatic dark/light mode
+  const trayIcon = nativeImage.createFromPath(icon).resize({ width: 18, height: 18 })
+  trayIcon.setTemplateImage(true)
+
+  tray = new Tray(trayIcon)
+  tray.setToolTip('Regis — AI Assistant')
+
   const contextMenu = Menu.buildFromTemplate([
-    { label: 'Toggle Chat Window', click: toggleWindow },
+    { label: 'Open Regis',   click: () => { positionNearTray(); mainWindow?.show(); mainWindow?.focus() } },
+    { label: 'Hide',         click: () => mainWindow?.hide() },
     { type: 'separator' },
-    { label: 'Quit Regis', click: () => app.quit() }
+    { label: 'Quit Regis',   click: () => app.quit() }
   ])
-  tray.setToolTip('Regis Assistant')
   tray.setContextMenu(contextMenu)
 
-  // Clicking the tray icon itself toggles the window
   tray.on('click', toggleWindow)
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  if (process.platform !== 'darwin') app.quit()
 })

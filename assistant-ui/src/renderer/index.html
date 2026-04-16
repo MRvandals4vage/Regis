@@ -1,20 +1,21 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Electron</title>
-    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
+    <title>Regis</title>
+    <meta name="description" content="Regis — Your local AI assistant" />
+    <!-- Relax CSP to allow Google Fonts and local assets -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+      content="default-src 'self';
+               script-src 'self';
+               style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+               font-src 'self' https://fonts.gstatic.com;
+               img-src 'self' data: blob:;
+               connect-src 'self' http://127.0.0.1:8000;"
     />
   </head>
-
   <body>
-    <style>
-      body, html { margin: 0; padding: 0; background-color: transparent; }
-      * { box-sizing: border-box; }
-    </style>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

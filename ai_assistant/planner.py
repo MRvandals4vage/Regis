@@ -128,16 +128,20 @@ def _stub_plan(text: str) -> dict:
         steps.append({"action": "close_app", "params": {"app_name": app_name}})
 
     if steps:
-        return {"steps": steps}
+        actions = ", ".join(s["action"] for s in steps)
+        return {"steps": steps, "reply": f"On it — running: {actions}."}
 
     if "screenshot" in t or "screen" in t:
-        return {"steps": [{"action": "get_screen_text", "params": {}}]}
+        return {"steps": [{"action": "get_screen_text", "params": {}}],
+                "reply": "Capturing screen text…"}
 
     if "wait" in t:
-        return {"steps": [{"action": "wait", "params": {"seconds": 2}}]}
+        return {"steps": [{"action": "wait", "params": {"seconds": 2}}],
+                "reply": "Waiting 2 seconds."}
 
     # Default: try to run as a shell command
-    return {"steps": [{"action": "run_command", "params": {"command": text}}]}
+    return {"steps": [{"action": "run_command", "params": {"command": text}}],
+            "reply": f"Running: {text}"}
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
