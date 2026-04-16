@@ -1,8 +1,16 @@
 import { useState, useRef, useEffect } from 'react'
+import './assets/assistant.css'
+
+interface LogEntry {
+  type: 'user' | 'ai' | 'loading'
+  content: string
+  steps?: any[]
+  statusMessage?: string
+}
 
 export default function App() {
   const [command, setCommand] = useState('')
-  const [logs, setLogs] = useState<string[]>([])
+  const [logs, setLogs] = useState<LogEntry[]>([])
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -11,11 +19,17 @@ export default function App() {
   }, [logs])
 
   const handleCommand = async () => {
-    if (!command.trim()) return
+    if (!command.trim() || loading) return
+    
     const currentCmd = command
     setCommand('')
     setLoading(true)
-    setLogs((prev) => [...prev, `🟢 You: ${currentCmd}`, '[Thinking...]'])
+    
+    setLogs((prev) => [
+      ...prev, 
+      { type: 'user', content: currentCmd },
+      { type: 'loading', content: 'Thinking...' }
+    ])
 
     try {
       const res = await fetch('http://127.0.0.1:8000', {
@@ -26,76 +40,121 @@ export default function App() {
 
       const data = await res.json()
       
-      let newLog = `📋 Plan:\n`
-      if (data.steps && data.steps.length > 0) {
-        data.steps.forEach((s: any, i: number) => {
-           newLog += `  ${i + 1}. ${s.action} → ${JSON.stringify(s.params)}\n`
-        })
-        newLog += `\n✅ ${data.message}`
-      } else {
-        newLog = `❌ No steps returned.`
-      }
-
-      setLogs((prev) => [...prev.filter(l => l !== '[Thinking...]'), newLog])
+      setLogs((prev) => {
+        const withoutLoading = prev.filter(l => l.type !== 'loading')
+        return [
+          ...withoutLoading,
+          { 
+            type: 'ai', 
+            content: data.message, 
+            steps: data.steps,
+            statusMessage: data.message 
+          }
+        ]
+      })
     } catch (err) {
-      setLogs((prev) => [...prev.filter(l => l !== '[Thinking...]'), `❌ Error connecting to Brain (server.py)`])
+      setLogs((prev) => {
+        const withoutLoading = prev.filter(l => l.type !== 'loading')
+        return [
+          ...withoutLoading,
+          { type: 'ai', content: '❌ Error connecting to Brain. Is server.py running?' }
+        ]
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleVoice = async () => {
+    if (loading) return
+    setLoading(true)
+    setLogs((prev) => [...prev, { type: 'loading', content: '🎙️ Listening...' }])
+
+    try {
+      const res = await fetch('http://127.0.0.1:8000/voice', { method: 'POST' })
+      const data = await res.json()
+      
+      setLogs((prev) => prev.filter(l => l.type !== 'loading'))
+      
+      if (data.success && data.text) {
+        setCommand(data.text)
+        // Optionally auto-run the command
+        // setTimeout(() => handleCommand(), 100);
+      } else {
+        setLogs((prev) => [...prev, { type: 'ai', content: '🔇 No voice detected or recording failed.' }])
+      }
+    } catch (err) {
+      setLogs((prev) => {
+        const withoutLoading = prev.filter(l => l.type !== 'loading')
+        return [
+          ...withoutLoading,
+          { type: 'ai', content: '❌ Error connecting to microphone service.' }
+        ]
+      })
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', height: '100vh', 
-      backgroundColor: '#1E1E1E', color: '#FFF', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-      borderRadius: '8px', overflow: 'hidden', border: '1px solid #333'
-    }}>
+    <div className="assistant-container">
       {/* Draggable Title Bar */}
-      <div style={{
-        height: '30px', WebkitAppRegion: 'drag', backgroundColor: '#252526', 
-        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold'
-      } as any}>
+      <div className="title-bar">
         Regis Assistant
       </div>
 
       {/* Chat Logs */}
-      <div style={{
-        flex: 1, padding: '15px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px'
-      }}>
-        <div style={{color: '#888', fontSize: '12px', textAlign: 'center'}}>Ask me to open an app, search something, or type text.</div>
+      <div className="chat-logs">
+        {logs.length === 0 && (
+          <div style={{color: 'rgba(255,255,255,0.3)', fontSize: '12px', textAlign: 'center', marginTop: '50px'}}>
+            How can I help you today?
+          </div>
+        )}
+        
         {logs.map((log, i) => (
-          <div key={i} style={{
-            backgroundColor: log.startsWith('🟢') ? '#264F78' : '#2D2D30',
-            padding: '10px', borderRadius: '6px', whiteSpace: 'pre-wrap', fontSize: '13px'
-          }}>
-            {log}
+          <div key={i} className={`message ${log.type}`}>
+            {log.content}
+            {log.steps && log.steps.length > 0 && (
+              <div style={{ marginTop: '10px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 'bold', marginBottom: '5px', opacity: 0.8 }}>
+                  PLAN ({log.steps.length} STEPS):
+                </div>
+                {log.steps.map((s: any, j: number) => (
+                  <div key={j} className="plan-step">
+                    {s.action} → {JSON.stringify(s.params)}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
         <div ref={bottomRef} />
       </div>
 
-      {/* Input Box */}
-      <div style={{ padding: '15px', backgroundColor: '#252526', display: 'flex', gap: '10px' }}>
+      {/* Input Area */}
+      <div className="input-area">
+        <button 
+          disabled={loading}
+          onClick={handleVoice}
+          className="voice-btn"
+          title="Voice Command"
+        >
+          🎙️
+        </button>
         <input 
           autoFocus
           disabled={loading}
+          className="input-box"
           type="text" 
           value={command}
           onChange={(e) => setCommand(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleCommand()}
-          placeholder="Ask me to do something..."
-          style={{
-            flex: 1, padding: '8px 12px', borderRadius: '6px', border: '1px solid #444', 
-            backgroundColor: '#3C3C3C', color: '#FFF', outline: 'none'
-          }}
+          placeholder="Type a command..."
         />
         <button 
-          disabled={loading}
+          disabled={loading || !command.trim()}
           onClick={handleCommand}
-          style={{
-            padding: '8px 15px', borderRadius: '6px', border: 'none', 
-            backgroundColor: '#0E639C', color: '#FFF', cursor: 'pointer', fontWeight: 'bold'
-          }}
+          className="run-btn"
         >
           Run
         </button>
@@ -103,3 +162,4 @@ export default function App() {
     </div>
   )
 }
+

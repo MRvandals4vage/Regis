@@ -21,6 +21,7 @@ Respond strictly in this format:
 
 Available actions and their required params:
 - open_app      : {"app_name": "Safari"}
+- close_app     : {"app_name": "Safari"}
 - open_url      : {"url": "https://example.com"}
 - type_text     : {"text": "hello world"}
 - press_key     : {"key": "enter"}
@@ -112,6 +113,19 @@ def _stub_plan(text: str) -> dict:
                 steps.append({"action": "wait", "params": {"seconds": 2}})
             steps.append({"action": "type_text", "params": {"text": content.strip()}})
             steps.append({"action": "press_key", "params": {"key": "enter"}})
+
+    # 4. Close app
+    close_match = re.search(r'(?:close|quit|stop|exit)\s+([a-zA-Z0-9\-\s]+?)(?:\s|$)', text, re.IGNORECASE)
+    if close_match:
+        app_name = close_match.group(1).strip()
+        if app_name.lower() in ("browser", "safari"):
+            app_name = "Safari"
+        elif app_name.lower() in ("chrome", "google chrome"):
+            app_name = "Google Chrome"
+        elif app_name.lower() == "codex":
+             # Handle special case if codex was what they meant
+             app_name = "Google Chrome" # Example fallback if codex was a browser window
+        steps.append({"action": "close_app", "params": {"app_name": app_name}})
 
     if steps:
         return {"steps": steps}

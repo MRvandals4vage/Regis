@@ -23,6 +23,20 @@ class VoiceInput:
         self.model  = WhisperModel(WHISPER_MODEL_SIZE, device=WHISPER_DEVICE,
                                    compute_type="int8")
         self._queue = queue.Queue()
+        
+        # Verify microphone availability
+        if sd:
+            try:
+                devices = sd.query_devices()
+                default_input = sd.default.device[0]
+                if default_input < 0 or not any(d['max_input_channels'] > 0 for d in devices):
+                    print("⚠️  [Voice] No input devices found. Voice mode will be disabled.")
+                else:
+                    print(f"🎙️  [Voice] Found input device: {devices[default_input]['name']}")
+            except Exception as e:
+                print(f"⚠️  [Voice] Could not query audio devices: {e}")
+        else:
+            print("⚠️  [Voice] 'sounddevice' not installed. Voice mode disabled.")
 
     # ── internal ─────────────────────────────────────────────────────────────
 

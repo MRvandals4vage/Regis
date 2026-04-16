@@ -98,10 +98,18 @@ def _get_screen_text(params: dict):
     return text
 
 
+def _close_app(params: dict):
+    name = params["app_name"]
+    print(f"[Exec] Closing app: {name}")
+    script = f'tell application "{name}" to quit'
+    subprocess.run(["osascript", "-e", script])
+
+
 # ─── Dispatch table ──────────────────────────────────────────────────────────
 
 ACTION_MAP = {
     "open_app":        _open_app,
+    "close_app":       _close_app,
     "open_url":        _open_url,
     "type_text":       _type_text,
     "press_key":       _press_key,

@@ -41,8 +41,8 @@ def process_command(text: str, memory: Memory, vision: Vision):
     # Summary
     ok    = sum(1 for r in results if r["status"] == "ok")
     total = len(results)
-    print(f"✅ Executed {ok}/{total} steps.\n")
-
+    print(f" Executed {ok}/{total} steps.\n")
+# 
 
 def run_voice_mode():
     """Main loop: continuously listen for voice commands."""
