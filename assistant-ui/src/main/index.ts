@@ -30,6 +30,12 @@ function createWindow(): BrowserWindow {
     win.focus()
   })
 
+  // Prevent window from closing, just hide it
+  win.on('close', (event) => {
+    event.preventDefault()
+    win.hide()
+  })
+
   // Hide when focus lost (menu-bar style)
   win.on('blur', () => {
     if (!is.dev) win.hide()
