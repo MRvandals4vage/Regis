@@ -33,6 +33,8 @@ extraResources:
       - "!**/__pycache__"
       - "!.venv"
       - "!.git"
+  - from: resources/backend_launcher.sh
+    to: backend_launcher.sh
 dmg:
   artifactName: ${name}-${version}.${ext}
 linux:

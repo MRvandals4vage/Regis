@@ -1,52 +1,64 @@
-import { app, shell, BrowserWindow, Tray, Menu, nativeImage } from 'electron'
+import { app, shell, BrowserWindow, Tray, Menu, nativeImage, screen } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { spawn, ChildProcess } from 'child_process'
+import { appendFileSync } from 'fs'
 import icon from '../../resources/icon.png?asset'
 
 let tray: Tray | null = null
 let mainWindow: BrowserWindow | null = null
 let backendProcess: ChildProcess | null = null
 
+// Use a log file in the user's home directory for maximum visibility
+const LOG_FILE = join(app.getPath('home'), 'regis_debug.log')
+function log(msg: string) {
+  const line = `[${new Date().toISOString()}] ${msg}\n`
+  try {
+    appendFileSync(LOG_FILE, line)
+  } catch (e) {}
+}
+
 function startBackend(): void {
   const isDev = is.dev && process.env['ELECTRON_RENDERER_URL']
+  log(`Starting backend... isDev: ${isDev}`)
   
   if (isDev) {
     const backendPath = join(app.getAppPath(), '..', 'ai_assistant')
     const pythonExecutable = join(backendPath, '.venv', 'bin', 'python')
     
-    console.log(`Starting backend in dev: ${backendPath}`)
+    log(`Dev backend path: ${backendPath}`)
     backendProcess = spawn(pythonExecutable, ['server.py'], {
       cwd: backendPath,
       stdio: 'inherit'
     })
   } else {
-    // In production, we use the launcher script
-    const launcherPath = join(process.resourcesPath, 'resources', 'backend_launcher.sh')
+    const launcherPath = join(process.resourcesPath, 'backend_launcher.sh')
+    log(`Prod launcher path: ${launcherPath}`)
     
-    console.log(`Starting backend via launcher: ${launcherPath}`)
     backendProcess = spawn('bash', [launcherPath], {
       cwd: process.resourcesPath,
-      stdio: 'inherit'
+      shell: true,
+      env: { ...process.env, PATH: '/opt/homebrew/bin:/usr/local/bin:' + process.env.PATH }
     })
   }
 
-  backendProcess?.on('error', (err) => {
-    console.error('Failed to start backend:', err)
-  })
+  backendProcess?.on('error', (err) => { log(`Backend spawn error: ${err.message}`) })
+  backendProcess?.on('exit', (code) => { log(`Backend exited with code: ${code}`) })
 }
 
 function createWindow(): BrowserWindow {
+  log('Creating window...')
   const win = new BrowserWindow({
     width: 420,
     height: 680,
     show: false,
     frame: false,
-    transparent: true,
+    transparent: false, // Turn off transparency for debugging
+    backgroundColor: '#0d0d14',
     alwaysOnTop: true,
     autoHideMenuBar: true,
     resizable: false,
-    skipTaskbar: true, // Don't show in dock when visible
+    skipTaskbar: false, // Show in dock for now so user can find it
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -55,28 +67,16 @@ function createWindow(): BrowserWindow {
   })
 
   win.once('ready-to-show', () => {
-    // We don't necessarily show it on start if it's a menu bar app
-    // but the user might want it to pop up. Let's keep it hidden initially
-    // or show it if they just opened the app from Applications.
-    if (!app.getLoginItemSettings().wasOpenedAtLogin) {
-      toggleWindow()
-    }
+    log('Window ready to show')
+    win.show() // Force show
+    win.focus()
   })
 
   win.on('close', (event) => {
-    if (!app.isQuitting) {
+    if (!(app as any).isQuitting) {
       event.preventDefault()
       win.hide()
     }
-  })
-
-  win.on('blur', () => {
-    if (!is.dev) win.hide()
-  })
-
-  win.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
-    return { action: 'deny' }
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -90,14 +90,29 @@ function createWindow(): BrowserWindow {
 
 const positionNearTray = () => {
   if (!mainWindow || !tray) return
+  
   const trayBounds = tray.getBounds()
   const winBounds = mainWindow.getBounds()
-  
-  // Center window horizontally under the tray icon
-  const x = Math.round(trayBounds.x + trayBounds.width / 2 - winBounds.width / 2)
-  // Position window vertically below the tray icon
-  const y = Math.round(trayBounds.y + trayBounds.height + 4)
-  
+  const primaryDisplay = screen.getPrimaryDisplay()
+  const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize
+
+  log(`Tray bounds: ${JSON.stringify(trayBounds)}`)
+
+  let x = Math.round(trayBounds.x + trayBounds.width / 2 - winBounds.width / 2)
+  let y = Math.round(trayBounds.y + trayBounds.height + 4)
+
+  // Fallback if tray bounds are weird
+  if (trayBounds.width === 0 || trayBounds.height === 0) {
+    x = screenWidth - winBounds.width - 20
+    y = 40
+  }
+
+  if (x + winBounds.width > screenWidth) x = screenWidth - winBounds.width - 10
+  if (x < 0) x = 10
+  if (y + winBounds.height > screenHeight) y = screenHeight - winBounds.height - 10
+  if (y < 0) y = 40
+
+  log(`Positioning window at: ${x}, ${y}`)
   mainWindow.setPosition(x, y)
 }
 
@@ -112,26 +127,11 @@ const toggleWindow = () => {
   }
 }
 
-// Custom property to handle closing
 ;(app as any).isQuitting = false
 
 app.whenReady().then(() => {
+  log('App ready event fired')
   electronApp.setAppUserModelId('com.regis.assistant')
-
-  // Set to launch at login
-  app.setLoginItemSettings({
-    openAtLogin: true,
-    openAsHidden: true
-  })
-
-  app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window)
-  })
-
-  // Hide dock icon on macOS — pure menu-bar app
-  if (process.platform === 'darwin' && app.dock) {
-    app.dock.hide()
-  }
 
   startBackend()
   mainWindow = createWindow()
@@ -143,10 +143,8 @@ app.whenReady().then(() => {
   tray.setToolTip('Regis — AI Assistant')
 
   const contextMenu = Menu.buildFromTemplate([
-    { label: 'Open Regis',   click: () => { positionNearTray(); mainWindow?.show(); mainWindow?.focus() } },
-    { type: 'checkbox', label: 'Launch at Login', checked: app.getLoginItemSettings().openAtLogin, click: (item) => {
-      app.setLoginItemSettings({ openAtLogin: item.checked })
-    }},
+    { label: 'Show Regis', click: () => { positionNearTray(); mainWindow?.show(); mainWindow?.focus() } },
+    { label: 'Hide Regis', click: () => { mainWindow?.hide() } },
     { type: 'separator' },
     { label: 'Quit Regis',   click: () => {
       ;(app as any).isQuitting = true
@@ -159,13 +157,8 @@ app.whenReady().then(() => {
 })
 
 app.on('before-quit', () => {
+  log('App quitting...')
   if (backendProcess) {
     backendProcess.kill()
-  }
-})
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
   }
 })
