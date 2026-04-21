@@ -11,7 +11,7 @@ try:
     _SD_AVAILABLE = True
 except ImportError:
     _SD_AVAILABLE = False
-    print("⚠️  [Voice] sounddevice not installed. Run: pip install sounddevice", file=sys.stderr)
+    print("⚠️  [Voice] sound device not installed. Run: pip install sound device", file=sys.stderr)
 
 try:
     from faster_whisper import WhisperModel
