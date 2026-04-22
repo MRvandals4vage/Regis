@@ -16,7 +16,8 @@ from memory import Memory
 from vision import Vision
 from voice import VoiceInput
 from speaker import say
-from config import TTS_ENABLED
+from hotword import HotwordListener
+from config import TTS_ENABLED, HOTWORD, HOTWORD_ENABLED
 
 # ── Global singletons ────────────────────────────────────────────────────────
 memory = Memory()
@@ -30,11 +31,48 @@ except Exception as e:
     voice = None
 
 
+def process_full_command(command: str) -> dict:
+    """
+    Shared logic to take a text command, plan it, execute it, save it, and speak it.
+    """
+    command = command.strip()
+    if not command:
+        return {"error": "Empty command", "reply": "I didn't catch that."}
+
+    print(f"🧠 Processing command: {command!r}")
+    plan_data = plan(command)
+    steps = plan_data.get("steps", [])
+
+    results = []
+    if steps:
+        results = execute(steps)
+        ok_count = sum(1 for r in results if r.get("status") == "ok")
+        # Build a human-readable reply
+        reply = plan_data.get("reply") or plan_data.get("message") or f"Done — executed {ok_count} of {len(steps)} steps."
+        
+        memory.save_steps(steps, reply=reply)
+        memory.save_command(command)
+    else:
+        reply = "I couldn't figure out how to do that."
+        ok_count = 0
+        
+    print(f"✅ Executed {ok_count}/{len(results or [0])} steps.")
+    
+    if TTS_ENABLED:
+        say(reply)
+        
+    return {
+        "reply": reply,
+        "steps": steps,
+        "results": results,
+        "message": reply
+    }
+
+
 # ── Request Handler ──────────────────────────────────────────────────────────
 class AssistantAPI(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
-        # Suppress default noisy HTTP logs; we print our own
         pass
 
     def _send_cors_headers(self):
@@ -92,74 +130,58 @@ class AssistantAPI(BaseHTTPRequestHandler):
 
     def _handle_command(self):
         data = self._read_body()
-        command = data.get("command", "").strip()
-
-        if not command:
-            self._send_json(400, {"error": "Empty command"})
-            return
-
-        print(f"🧠 Command received: {command!r}")
-
-        plan_data = plan(command)
-        steps = plan_data.get("steps", [])
-
-        results = []
-        if steps:
-            results = execute(steps)
-            ok_count = sum(1 for r in results if r.get("status") == "ok")
-            
-            # Build a human-readable reply
-            reply = plan_data.get("reply") or plan_data.get("message") or f"Done — executed {ok_count} of {len(steps)} steps."
-            
-            memory.save_steps(steps, reply=reply)
-            memory.save_command(command)
-        else:
-            reply = "I couldn't figure out how to do that."
-            ok_count = 0
-            
-        print(f"✅ Executed {ok_count}/{len(results)} steps.")
-        
-        if TTS_ENABLED:
-            say(reply)
-        
-        self._send_json(200, {
-            "reply": reply,
-            "steps": steps,
-            "results": results,
-            "message": reply
-        })
+        command = data.get("command", "")
+        response = process_full_command(command)
+        status = 400 if "error" in response else 200
+        self._send_json(status, response)
 
     def _handle_voice(self):
         if voice is None:
-            self._send_json(503, {
-                "error": "Voice system not available. Check server logs.",
-                "success": False,
-                "text": ""
-            })
+            self._send_json(503, {"error": "Voice system not available", "success": False})
             return
 
         print("🎙️  Starting voice capture…")
         try:
             text = voice.listen_once()
+            self._send_json(200, {"text": text or "", "success": bool(text)})
         except Exception as e:
             print(f"❌ Voice capture failed: {e}")
-            self._send_json(500, {"error": str(e), "success": False, "text": ""})
-            return
+            self._send_json(500, {"error": str(e), "success": False})
 
-        print(f"🎙️  Heard: {text!r}")
-        self._send_json(200, {
-            "text": text or "",
-            "success": bool(text)
-        })
+
+# ── Hotword Callback ──────────────────────────────────────────────────────────
+def on_hotword():
+    if voice is None:
+        return
+    
+    # Optional: play a short beep here
+    print("✨ Hotword triggered internally!")
+    try:
+        text = voice.listen_once()
+        if text:
+            process_full_command(text)
+    except Exception as e:
+        print(f"[Hotword] Trigger failed: {e}")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == '__main__':
     port = 8000
+    
+    # Start Hotword Listener if enabled
+    if HOTWORD_ENABLED:
+        try:
+            hw = HotwordListener(hotword=HOTWORD)
+            hw.start(on_hotword)
+            print(f"👂 Background listener active for '{HOTWORD}'")
+        except Exception as e:
+            print(f"⚠️  Could not start Hotword Listener: {e}")
+
     print(f"\n{'='*50}")
     print(f"  🧠 Regis Brain  —  http://localhost:{port}")
     print(f"  Routes: GET /health  |  POST /command  |  POST /voice")
     print(f"{'='*50}\n")
+    
     server = ThreadingHTTPServer(('0.0.0.0', port), AssistantAPI)
     try:
         server.serve_forever()

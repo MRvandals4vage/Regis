@@ -7,6 +7,8 @@ WHISPER_MODEL_SIZE = "base"          # tiny | base | small | medium | large
 WHISPER_DEVICE     = "cpu"           # cpu | cuda
 WHISPER_LANGUAGE   = "en"
 TTS_ENABLED        = True            # Enable/disable voice feedback
+HOTWORD_ENABLED    = True            # Enable/disable background wake word
+HOTWORD            = "regis"         # The wake word to listen for
 
 # ─── LLM ─────────────────────────────────────────────────────────────────────
 # Swap this URL / model for Gemma (Ollama) or OpenRouter

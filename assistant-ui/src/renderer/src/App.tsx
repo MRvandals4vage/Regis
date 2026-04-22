@@ -31,10 +31,28 @@ export default function App() {
     try {
       const r = await fetch(`${BACKEND}/health`, { signal: AbortSignal.timeout(2000) })
       setConnected(r.ok)
+      
+      // If we are not currently doing something, sync history in case a hotword triggered a command
+      if (r.ok && !busy && !listening) {
+        const hRes = await fetch(`${BACKEND}/history`)
+        const hData = await hRes.json()
+        if (hData.history && Array.isArray(hData.history)) {
+          // Only update if the history length changed to avoid unnecessary re-renders
+          if (hData.history.length * 2 !== messages.length) {
+             const loadedMessages: Message[] = []
+             hData.history.forEach((entry: any) => {
+               loadedMessages.push({ id: nextId(), role: 'user', text: entry.command })
+               const reply = entry.reply || `Done — executed ${entry.steps?.length ?? 0} steps.`
+               loadedMessages.push({ id: nextId(), role: 'ai', text: reply, steps: entry.steps })
+             })
+             setMessages(loadedMessages)
+          }
+        }
+      }
     } catch {
       setConnected(false)
     }
-  }, [])
+  }, [busy, listening, messages.length])
 
   useEffect(() => {
     const init = async () => {

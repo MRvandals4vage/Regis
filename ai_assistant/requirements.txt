@@ -7,3 +7,4 @@ numpy
 Pillow
 PyQt6
 pyinstaller
+vosk
