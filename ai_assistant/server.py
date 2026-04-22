@@ -33,39 +33,66 @@ except Exception as e:
 
 def process_full_command(command: str) -> dict:
     """
-    Shared logic to take a text command, plan it, execute it, save it, and speak it.
+    Advanced agentic loop: Plan -> Execute -> Observe -> Repeat
     """
     command = command.strip()
     if not command:
         return {"error": "Empty command", "reply": "I didn't catch that."}
 
-    print(f"🧠 Processing command: {command!r}")
-    plan_data = plan(command)
-    steps = plan_data.get("steps", [])
+    print(f"🧠 Starting agentic loop for: {command!r}")
+    
+    current_screen = ""
+    all_steps = []
+    all_results = []
+    max_iterations = 5
+    final_reply = "Task completed."
 
-    results = []
-    if steps:
+    for i in range(max_iterations):
+        print(f"🔄 Loop iteration {i+1}...")
+        
+        # 1. Plan
+        plan_data = plan(command, screen_context=current_screen, history=all_steps)
+        
+        thought = plan_data.get("thought", "")
+        steps = plan_data.get("steps", [])
+        done = plan_data.get("done", True)
+        final_reply = plan_data.get("reply", final_reply)
+        
+        if thought:
+            print(f"💭 Thought: {thought}")
+
+        if not steps and done:
+            break
+
+        # 2. Execute
         results = execute(steps)
-        ok_count = sum(1 for r in results if r.get("status") == "ok")
-        # Build a human-readable reply
-        reply = plan_data.get("reply") or plan_data.get("message") or f"Done — executed {ok_count} of {len(steps)} steps."
+        all_steps.extend(steps)
+        all_results.extend(results)
+
+        # 3. Observe (if any step was get_screen_text, update context)
+        for res in results:
+            if res.get("action") == "get_screen_text" and res.get("status") == "ok":
+                current_screen = res.get("output", "")
+
+        if done:
+            break
         
-        memory.save_steps(steps, reply=reply)
-        memory.save_command(command)
-    else:
-        reply = "I couldn't figure out how to do that."
-        ok_count = 0
-        
-    print(f"✅ Executed {ok_count}/{len(results or [0])} steps.")
+        # Small pause between rounds
+        import time
+        time.sleep(1)
+
+    # Finalize
+    memory.save_command(command)
+    memory.save_steps(all_steps, reply=final_reply)
     
     if TTS_ENABLED:
-        say(reply)
+        say(final_reply)
         
     return {
-        "reply": reply,
-        "steps": steps,
-        "results": results,
-        "message": reply
+        "reply": final_reply,
+        "steps": all_steps,
+        "results": all_results,
+        "message": final_reply
     }
 
 

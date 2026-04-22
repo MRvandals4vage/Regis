@@ -9,17 +9,21 @@ from config import LLM_ENDPOINT, LLM_MODEL, LLM_TIMEOUT
 
 # ─── Prompt template ─────────────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """You are an AI assistant that controls a macOS computer.
-Given a user command, output ONLY valid JSON — no prose, no markdown fences.
+SYSTEM_PROMPT = """You are an advanced AI agent that controls a macOS computer.
+Your goal is to solve the user's request by planning and executing steps.
+You use a "Thought-Action-Observation" loop.
 
-Respond strictly in this format:
+Respond ONLY with a valid JSON object in this format:
 {
+  "thought": "Brief explanation of your reasoning and what you've seen so far",
   "steps": [
     {"action": "<action_name>", "params": {<key>: <value>}}
-  ]
+  ],
+  "done": true/false,
+  "reply": "Human-friendly update for the user"
 }
 
-Available actions and their required params:
+Available actions:
 - open_app      : {"app_name": "Safari"}
 - close_app     : {"app_name": "Safari"}
 - open_url      : {"url": "https://example.com"}
@@ -32,10 +36,11 @@ Available actions and their required params:
 - get_screen_text: {}
 
 Rules:
-- Use open_url for web tasks, open_app for native apps.
-- Chain steps logically.
-- If opening an app and then typing text, ALWAYS add a `wait` step (2-3 seconds) between `open_app` and `type_text` so the app has time to load.
-- Never include explanations outside the JSON.
+1. If you need to see what's on the screen to decide the next step, use `get_screen_text` and set `done: false`.
+2. If you have finished the user's request, set `done: true`.
+3. If you are opening an app, add a `wait` step (2-3s) before interacting with it.
+4. Always provide a clear `thought` and a friendly `reply`.
+5. NEVER include prose outside the JSON.
 """
 
 
@@ -158,22 +163,19 @@ def _extract_json(raw: str) -> dict:
     return json.loads(match.group())
 
 
-def plan(user_text: str, screen_context: str = "") -> dict:
+def plan(user_text: str, screen_context: str = "", history: list = None) -> dict:
     """
     Return a structured action plan for *user_text*.
-
-    Args:
-        user_text:      The transcribed voice command.
-        screen_context: Optional OCR text from the current screen.
-
-    Returns:
-        dict with key "steps" → list of {"action": str, "params": dict}
     """
     context_block = ""
     if screen_context:
-        context_block = f"\nCurrent screen content:\n{screen_context[:1500]}\n"
+        context_block = f"\n[Observation] Current screen content:\n{screen_context[:2000]}\n"
 
-    full_prompt = f"{SYSTEM_PROMPT}{context_block}\nUser command: {user_text}\n"
+    history_block = ""
+    if history:
+        history_block = f"\n[History] Previous steps:\n{json.dumps(history[-3:], indent=2)}\n"
+
+    full_prompt = f"{SYSTEM_PROMPT}{history_block}{context_block}\nUser command: {user_text}\n"
 
     raw = _call_llm(full_prompt)
 
@@ -183,9 +185,11 @@ def plan(user_text: str, screen_context: str = "") -> dict:
 
     try:
         plan_data = _extract_json(raw)
-        # Validate top-level structure
-        if "steps" not in plan_data or not isinstance(plan_data["steps"], list):
-            raise ValueError("Missing 'steps' list")
+        # Ensure default values for new fields
+        plan_data.setdefault("steps", [])
+        plan_data.setdefault("done", True)
+        plan_data.setdefault("thought", "No reasoning provided.")
+        plan_data.setdefault("reply", "Done.")
         return plan_data
     except (json.JSONDecodeError, ValueError) as exc:
         print(f"[Planner] Could not parse LLM response ({exc}), using stub.")
