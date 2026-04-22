@@ -37,7 +37,25 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    pingServer()
+    const init = async () => {
+      await pingServer()
+      try {
+        const res = await fetch(`${BACKEND}/history`)
+        const data = await res.json()
+        if (data.history && Array.isArray(data.history)) {
+          const loadedMessages: Message[] = []
+          data.history.forEach((entry: any) => {
+            loadedMessages.push({ id: nextId(), role: 'user', text: entry.command })
+            const reply = entry.reply || `Done — executed ${entry.steps?.length ?? 0} steps.`
+            loadedMessages.push({ id: nextId(), role: 'ai', text: reply, steps: entry.steps })
+          })
+          setMessages(loadedMessages)
+        }
+      } catch (err) {
+        console.error('Failed to load history:', err)
+      }
+    }
+    init()
     pingTimer.current = setInterval(pingServer, 5000)
     return () => { if (pingTimer.current) clearInterval(pingTimer.current) }
   }, [pingServer])

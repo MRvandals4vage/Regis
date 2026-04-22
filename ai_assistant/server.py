@@ -60,6 +60,10 @@ class AssistantAPI(BaseHTTPRequestHandler):
                 "status": "ok",
                 "voice_ready": voice is not None
             })
+        elif self.path == '/history':
+            self._send_json(200, {
+                "history": memory.get_history()
+            })
         else:
             self._send_json(404, {"error": "Not found"})
 
@@ -100,15 +104,19 @@ class AssistantAPI(BaseHTTPRequestHandler):
         results = []
         if steps:
             results = execute(steps)
-            memory.save_steps(steps)
+            ok_count = sum(1 for r in results if r.get("status") == "ok")
+            
+            # Build a human-readable reply
+            reply = plan_data.get("reply") or plan_data.get("message") or f"Done — executed {ok_count} of {len(steps)} steps."
+            
+            memory.save_steps(steps, reply=reply)
             memory.save_command(command)
-
-        ok_count = sum(1 for r in results if r.get("status") == "ok")
+        else:
+            reply = "I couldn't figure out how to do that."
+            ok_count = 0
+            
         print(f"✅ Executed {ok_count}/{len(results)} steps.")
-
-        # Build a human-readable reply from plan data
-        reply = plan_data.get("reply") or plan_data.get("message") or f"Done — executed {ok_count} of {len(steps)} steps."
-
+        
         self._send_json(200, {
             "reply": reply,
             "steps": steps,

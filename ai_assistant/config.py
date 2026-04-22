@@ -27,3 +27,4 @@ SCREENSHOT_PATH = "/tmp/ai_assistant_screenshot.png"
 
 # ─── Memory ──────────────────────────────────────────────────────────────────
 MAX_HISTORY_ENTRIES = 20    # how many past commands to keep
+MEMORY_FILE_PATH    = os.path.join(os.path.dirname(__file__), "memory.json")
