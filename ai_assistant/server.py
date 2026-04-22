@@ -15,6 +15,8 @@ from executor import execute
 from memory import Memory
 from vision import Vision
 from voice import VoiceInput
+from speaker import say
+from config import TTS_ENABLED
 
 # ── Global singletons ────────────────────────────────────────────────────────
 memory = Memory()
@@ -116,6 +118,9 @@ class AssistantAPI(BaseHTTPRequestHandler):
             ok_count = 0
             
         print(f"✅ Executed {ok_count}/{len(results)} steps.")
+        
+        if TTS_ENABLED:
+            say(reply)
         
         self._send_json(200, {
             "reply": reply,
